@@ -16,7 +16,8 @@ import httpx          # pip install httpx
 import json
 
 load_dotenv()
-
+THRESH_AUTHENTIC = 68   # single source of truth
+THRESH_SUSPICIOUS = 44
 # ── Optional AWS ───────────────────────────────────────────────────────────────
 try:
     import boto3
@@ -72,49 +73,46 @@ class ReportRequest(BaseModel):
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _analyze_frame(img) -> dict:
-    """
-    OpenCV analysis - returns raw scores only.
-    Does NOT determine verdict - that's done by _merge or AWS.
-    """
     try:
         gray  = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         h, w  = img.shape[:2]
         flags = []
- 
-        # Laplacian noise variance
+
         noise_var = cv2.Laplacian(gray, cv2.CV_64F).var()
- 
-        # FFT
+
         f_mag      = 20 * np.log(np.abs(np.fft.fftshift(np.fft.fft2(gray))) + 1)
         ch, cw     = h // 2, w // 2
         corner_avg = (f_mag[:12, :12].mean() + f_mag[-12:, -12:].mean()) / 2
         center_avg = f_mag[ch-6:ch+6, cw-6:cw+6].mean()
         ratio      = corner_avg / (center_avg + 1e-10)
- 
-        # Color channels
+
         b, g, r = cv2.split(img)
         ch_var  = np.std([np.std(b.astype(float)),
                           np.std(g.astype(float)),
                           np.std(r.astype(float))])
- 
-        # Edge density
+
         edges        = cv2.Canny(gray, 50, 150)
         edge_density = edges.sum() / (h * w)
- 
-        # ── Score each test independently ──────────────────────────────────
-        # noise: GAN = very low (<15), compressed real = 50-500, uncompressed real = 500+
+
+        # ── SAFE DEFAULTS — always assigned, never unbound ──────────────
+        face_score        = 70
+        fingerprint_score = 70
+        compression_score = 70
+        sync_score        = 70
+
+        # noise_var: real compressed video = 20-150, GAN = <15
         if noise_var < 8:
             face_score = 15
             flags.append("GAN artifact pattern detected in frequency domain")
-        elif noise_var < 25:
-            face_score = 38
+        elif noise_var < 45:        # raised from 25 — catches WhatsApp/phone
+            face_score = 55
             flags.append("Unusually low texture variance")
-        elif noise_var < 60:
-            face_score = 62   # WhatsApp compressed photos land here
+        elif noise_var < 120:       # raised from 60 — real video frames land here
+            face_score = 72
         else:
             face_score = 88
- 
-        # FFT ratio: GAN = high ratio (>0.92), real = low ratio (<0.80)
+
+        # FFT ratio
         if ratio > 0.95:
             fingerprint_score = 15
             flags.append("Generative model fingerprint detected")
@@ -124,8 +122,8 @@ def _analyze_frame(img) -> dict:
             fingerprint_score = 70
         else:
             fingerprint_score = 90
- 
-        # Color variance: GAN = very uniform (<1.0), real = varied (>3.0)
+
+        # Color channel variance
         if ch_var < 0.8:
             compression_score = 18
             flags.append("Unnatural color channel uniformity")
@@ -135,8 +133,8 @@ def _analyze_frame(img) -> dict:
             compression_score = 72
         else:
             compression_score = 88
- 
-        # Edge density: GAN = very smooth (<0.002), real = varied (>0.01)
+
+        # Edge density
         if edge_density < 0.001:
             sync_score = 20
             flags.append("Suspiciously smooth edges")
@@ -146,10 +144,10 @@ def _analyze_frame(img) -> dict:
             sync_score = 72
         else:
             sync_score = 88
- 
+
         avg_truth = int(np.mean([face_score, fingerprint_score,
                                   compression_score, sync_score]))
- 
+
         return {
             "truth_score":  avg_truth,
             "face_score":   face_score,
@@ -157,10 +155,10 @@ def _analyze_frame(img) -> dict:
             "compression":  compression_score,
             "sync_score":   sync_score,
             "flags":        flags,
-            "noise_var":    float(noise_var),   # debug info
-            "fft_ratio":    float(ratio),        # debug info
-            "ch_var":       float(ch_var),       # debug info
-            "edge_density": float(edge_density), # debug info
+            "noise_var":    float(noise_var),
+            "fft_ratio":    float(ratio),
+            "ch_var":       float(ch_var),
+            "edge_density": float(edge_density),
         }
     except Exception as e:
         print(f"[Frame] Error: {e}")
@@ -175,25 +173,72 @@ def _opencv_analyze_image(image_bytes: bytes) -> dict:
         img   = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         if img is None:
             return None
- 
+
         result = _analyze_frame(img)
         if not result:
             return None
- 
-        score = result["truth_score"]
- 
-        # Print debug info so you can tune
-        print(f"[OpenCV] noise={result['noise_var']:.1f} fft={result['fft_ratio']:.3f} "
-              f"ch={result['ch_var']:.2f} edges={result['edge_density']:.4f} → score={score}")
- 
+
         result["metadata_score"] = _check_metadata(image_bytes, img)
         result["source"]         = "OpenCV pixel analysis"
         return result
- 
+
     except Exception as e:
         print(f"[OpenCV Image] Error: {e}")
         return None
     
+    
+HF_API_KEY = os.getenv("HUGGINGFACE_API_KEY", "")
+
+async def _huggingface_deepfake(image_bytes: bytes) -> dict:
+    """
+    Use HuggingFace deepfake detection model.
+    Model: dima806/deepfake_vs_real_image_detection
+    """
+    if not HF_API_KEY:
+        return None
+    try:
+        url = "https://api-inference.huggingface.co/models/Wvolf/ViT_Deepfake_Detection"
+        async with httpx.AsyncClient(timeout=20) as client:
+            resp = await client.post(
+                url,
+                headers={"Authorization": f"Bearer {HF_API_KEY}"},
+                content=image_bytes,
+            )
+            if resp.status_code != 200:
+                print(f"[HuggingFace] HTTP {resp.status_code}")
+                return None
+
+            results = resp.json()
+            if isinstance(results, list) and results:
+                # Model returns [{label: "Real", score: 0.95}, {label: "Fake", score: 0.05}]
+                real_score = next((r['score'] for r in results if 'real' in r['label'].lower()), 0.5)
+                fake_score = next((r['score'] for r in results if 'fake' in r['label'].lower()), 0.5)
+
+                truth_score = int(real_score * 100)
+                verdict     = "AUTHENTIC" if real_score > 0.65 else "SUSPICIOUS" if real_score > 0.45 else "FAKE"
+                flags       = []
+
+                if fake_score > 0.7:
+                    flags.append(f"HuggingFace model: {int(fake_score*100)}% fake probability")
+                elif fake_score > 0.45:
+                    flags.append(f"HuggingFace model: inconclusive ({int(fake_score*100)}% fake probability)")
+
+                print(f"[HuggingFace] Real: {real_score:.2f} Fake: {fake_score:.2f} → {verdict}")
+
+                return {
+                    "truth_score": truth_score,
+                    "face_score":  truth_score,
+                    "flags":       flags,
+                    "source":      "HuggingFace deepfake detector",
+                    "verdict":     verdict,
+                }
+    except Exception as e:
+        print(f"[HuggingFace] Error: {e}")
+    return None    
+
+
+def _deepface_analyze(image_path: str) -> dict:
+    return None  # disabled - requires TensorFlow
 
 def _check_metadata(image_bytes: bytes, img) -> int:
     try:
@@ -242,8 +287,21 @@ def _analyze_video(video_bytes: bytes) -> dict:
 
         cap = cv2.VideoCapture(tmp_path)
         if not cap.isOpened():
-            print("[Video] Could not open video file")
+            print("[Video] OpenCV failed — attempting ffmpeg remux...")
+            reencoded = tmp_path.replace(".mp4", "_re.mp4")
+            os.system(f"ffmpeg -y -i {tmp_path} -c:v libx264 -preset fast {reencoded} -loglevel quiet")
+            if os.path.exists(reencoded):
+                cap = cv2.VideoCapture(reencoded)
+                if cap.isOpened():
+                    print("[Video] Re-encoded successfully, proceeding...")
+                    tmp_path = reencoded  # clean this up in finally too
+
+        if not cap.isOpened():
+            print("[Video] Could not open video even after remux")
             return None
+        
+        print(f"[Video] OpenCV backend: {cv2.getBuildInformation()[:200]}")
+        print(f"[Video] File size: {len(video_bytes)} bytes, suffix: .mp4")
 
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         fps          = cap.get(cv2.CAP_PROP_FPS) or 25
@@ -541,13 +599,59 @@ async def analyze_media(file: UploadFile = File(...)):
 
     # ── IMAGE: AWS + OpenCV ──────────────────────────────────────────────────
     if file_type == "image":
+        # Run all 3 analyses
         aws_result = _aws_analyze(contents)
         cv_result  = _opencv_analyze_image(contents)
+        hf_result  = await _huggingface_deepfake(contents)
 
-        if aws_result and aws_result.get("no_face"):
+        print(f"[Analyze] AWS={aws_result.get('verdict') if aws_result and not aws_result.get('no_face') else 'none'} "
+            f"CV={cv_result.get('verdict') if cv_result else 'none'} "
+            f"HF={hf_result.get('verdict') if hf_result else 'none'}")
+
+        # Collect valid results
+        valid = [r for r in [hf_result, aws_result, cv_result]
+                if r and not r.get("no_face")]
+
+        if not valid:
             detection = cv_result
+        elif len(valid) == 1:
+            detection = valid[0]
         else:
-            detection = _merge(aws_result, cv_result)
+            # Weighted merge — HuggingFace gets most trust
+            weights = {
+                "HuggingFace AI Model":    0.50,
+                "AWS Rekognition":         0.30,
+                "OpenCV pixel analysis":   0.20,
+                "DeepFace + OpenCV":       0.20,
+                "AWS Rekognition + OpenCV":0.40,
+            }
+            total_weight  = 0
+            weighted_score = 0
+            for r in valid:
+                w = weights.get(r.get("source", ""), 0.20)
+                weighted_score += r["truth_score"] * w
+                total_weight   += w
+
+            avg     = int(weighted_score / total_weight)
+            flags   = list(dict.fromkeys(
+                sum([r.get("flags", []) for r in valid], [])
+            ))[:5]
+            verdict = "AUTHENTIC" if avg >= 68 else "SUSPICIOUS" if avg >= 44 else "FAKE"
+            sources = " + ".join(list(dict.fromkeys(
+                r.get("source", "") for r in valid
+            )))
+
+            detection = {
+                "truth_score":    avg,
+                "face_score":     valid[0].get("face_score",     avg),
+                "sync_score":     valid[0].get("sync_score",     75),
+                "compression":    valid[0].get("compression",    75),
+                "metadata_score": valid[0].get("metadata_score", 75),
+                "fingerprint":    valid[0].get("fingerprint",    avg),
+                "flags":          flags,
+                "source":         sources,
+                "verdict":        verdict,
+            }
 
     # ── VIDEO: Real frame sampling ───────────────────────────────────────────
     elif file_type == "video":

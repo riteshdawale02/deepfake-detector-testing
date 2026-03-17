@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+python-multipart
+numpy
+pillow
+boto3
+requests
+python-dotenv
+aiofiles

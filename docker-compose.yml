@@ -1,0 +1,13 @@
+services:
+  antigravity:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: antigravity
+    ports:
+      - 8000:8000
+    environment:
+      - AWS_ACCESS_KEY_ID=dummy
+      - AWS_SECRET_ACCESS_KEY=dummy
+      - AWS_REGION=ap-south-1
+    restart: always

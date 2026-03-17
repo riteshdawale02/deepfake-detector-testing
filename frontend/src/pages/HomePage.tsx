@@ -1,222 +1,141 @@
 import { motion } from 'framer-motion'
-import { Shield, Zap, Eye, FileText, TrendingUp, AlertTriangle, CheckCircle, Clock } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { useState, useEffect } from 'react'
+import { Shield, Scan, Newspaper, TrendingUp, AlertTriangle, CheckCircle, Clock, Zap } from 'lucide-react'
 import { historyService } from '../utils/historyService'
-import type { ScanHistoryItem } from '../utils/historyService'
 
-const stats = [
-  { label: 'Files Analyzed', value: '48,291', icon: Eye, color: '#00F5FF', change: '+12% today' },
-  { label: 'Fakes Detected', value: '11,843', icon: AlertTriangle, color: '#FF3D3D', change: '+8% today' },
-  { label: 'Certified Genuine', value: '36,448', icon: CheckCircle, color: '#00FF88', change: '+15% today' },
-  { label: 'Complaints Filed', value: '2,107', icon: FileText, color: '#FFB800', change: '+5% today' },
-]
-
-const fadeUp = {
-  hidden: { opacity: 0, y: 20 },
-  visible: (i: number) => ({ opacity: 1, y: 0, transition: { delay: i * 0.1, duration: 0.5 } }),
-}
+const fade = (delay = 0) => ({
+  initial: { opacity: 0, y: 16 },
+  animate: { opacity: 1, y: 0 },
+  transition: { duration: 0.4, delay, ease: 'easeOut' },
+})
 
 export default function HomePage() {
   const navigate = useNavigate()
-  const [history, setHistory] = useState<ScanHistoryItem[]>([])
+  const history = historyService.getScans()
 
-  useEffect(() => {
-    const data = historyService.getScans()
-    if (data.length > 0) {
-      setHistory(data)
-    } else {
-      // Fallback to placeholders if empty
-      setHistory([
-        { id: 'AG-18290', type: 'video', result: 'AUTHENTIC', score: 94, status: 'Certified', timestamp: Date.now() - 5 * 60 * 1000, platform: 'YouTube', time: '5m ago' },
-        { id: 'AG-18287', type: 'audio', result: 'FAKE', score: 8, status: 'Reported', timestamp: Date.now() - 11 * 60 * 1000, platform: 'TikTok', time: '11m ago' },
-      ])
-    }
-  }, [])
+  const stats = [
+    { label: 'Files Analyzed',    value: history.length || 0,                                  trend: '+12% today', color: 'var(--cyan)'  },
+    { label: 'Fakes Detected',    value: history.filter((h:any) => h.result === 'FAKE').length, trend: '+8% today',  color: 'var(--red)'   },
+    { label: 'Certified Genuine', value: history.filter((h:any) => h.result === 'AUTHENTIC').length, trend: '+15% today', color: 'var(--green)' },
+    { label: 'Cases Filed',       value: 0,                                                     trend: '+5% today',  color: 'var(--amber)' },
+  ]
 
   return (
-    <div className="space-y-6">
-      {/* Hero Banner */}
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6 }}
-        className="rounded-2xl p-8 relative overflow-hidden"
-        style={{
-          background: 'linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 50%, var(--bg-secondary) 100%)',
-          border: '1px solid var(--border-color)',
-        }}
-      >
-        {/* Decorative glow */}
-        <div
-          className="absolute top-0 right-0 w-96 h-96 rounded-full opacity-5"
-          style={{ background: 'radial-gradient(circle, var(--cyan), transparent)', transform: 'translate(30%, -30%)' }}
-        />
-        <div className="relative">
-          <div className="flex items-center gap-2 mb-3">
-            <Shield size={18} style={{ color: '#00F5FF' }} />
-            <span className="text-xs font-semibold tracking-widest" style={{ color: '#00F5FF', fontFamily: 'JetBrains Mono, monospace' }}>
-              ANTIGRAVITY INTELLIGENCE PLATFORM
-            </span>
+    <div>
+      {/* ── Page header ── */}
+      <motion.div {...fade(0)} className="page-header">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '6px' }}>
+          <div style={{ padding: '8px 14px', background: 'rgba(0,229,255,0.08)', border: '1px solid rgba(0,229,255,0.15)', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--cyan)', boxShadow: '0 0 8px var(--cyan)' }} />
+            <span style={{ fontSize: '10px', color: 'var(--cyan)', letterSpacing: '0.1em' }}>ANTIGRAVITY INTELLIGENCE PLATFORM</span>
           </div>
-          <h1 className="text-3xl font-bold mb-3" style={{ fontFamily: 'Syne, sans-serif', color: 'var(--text-primary)' }}>
-            Truth Detection System <br />
-            <span style={{ color: 'var(--cyan)', textShadow: '0 0 20px var(--accent-glow)' }}>v2.1 — Active</span>
-          </h1>
-          <p className="text-sm max-w-xl mb-6" style={{ color: 'var(--text-secondary)', lineHeight: 1.7 }}>
-            Upload any image, video, or audio file for AI-powered deepfake analysis. Get an explainable TruthScore™, 
-            forensic heatmap overlay, and optionally file a verified government complaint — all in under 60 seconds.
-          </p>
-          <div className="flex gap-3">
-            <motion.button
-              whileHover={{ scale: 1.04 }}
-              whileTap={{ scale: 0.97 }}
-              onClick={() => navigate('/scan')}
-              className="px-6 py-3 rounded-xl font-semibold text-sm flex items-center gap-2"
-              style={{
-                background: 'linear-gradient(135deg, #00F5FF, #0080FF)',
-                color: '#0A0E1A',
-                fontFamily: 'Syne, sans-serif',
-                boxShadow: '0 0 20px rgba(0, 245, 255, 0.35)',
-              }}
-            >
-              <Zap size={16} />
-              Launch Forensic Scanner
-            </motion.button>
-            <motion.button
-              whileHover={{ scale: 1.04 }}
-              whileTap={{ scale: 0.97 }}
-              onClick={() => navigate('/tracker')}
-              className="px-6 py-3 rounded-xl text-sm flex items-center gap-2"
-              style={{
-                background: 'transparent',
-                border: '1px solid var(--border-color)',
-                color: 'var(--text-secondary)',
-                fontFamily: 'JetBrains Mono, monospace',
-              }}
-            >
-              <Eye size={16} />
-              Track Case
-            </motion.button>
+        </div>
+        <h1 className="page-title">Truth Detection System</h1>
+        <p style={{ fontSize: '14px', color: 'var(--cyan)', fontFamily: 'Syne', fontWeight: 600, margin: '4px 0 8px' }}>v2.1 — Active</p>
+        <p style={{ fontSize: '13px', color: 'var(--text-secondary)', maxWidth: '600px', lineHeight: 1.6 }}>
+          Upload any image, video, or audio for AI-powered deepfake analysis. Get an explainable TruthScore™, forensic heatmap, and optionally file a verified government complaint.
+        </p>
+      </motion.div>
+
+      {/* ── CTA Buttons ── */}
+      <motion.div {...fade(0.05)} style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '32px' }}>
+        <button className="btn btn-primary" onClick={() => navigate('/scan')} style={{ fontSize: '14px', padding: '13px 24px' }}>
+          <Scan size={16} /> Launch Forensic Scanner
+        </button>
+        <button className="btn btn-ghost" onClick={() => navigate('/tracker')} style={{ fontSize: '13px' }}>
+          <Shield size={14} /> Track Case
+        </button>
+      </motion.div>
+
+      {/* ── Stats grid ── */}
+      <motion.div {...fade(0.1)} className="grid-4" style={{ marginBottom: '28px' }}>
+        {stats.map(({ label, value, trend, color }) => (
+          <div key={label} className="metric-card">
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '8px' }}>
+              <span className="metric-label">{label}</span>
+              <TrendingUp size={12} style={{ color: 'var(--green)', opacity: 0.7 }} />
+            </div>
+            <div style={{ fontFamily: 'JetBrains Mono', fontSize: '32px', fontWeight: 700, color, lineHeight: 1 }}>{value.toLocaleString()}</div>
+            <div style={{ fontSize: '10px', color: 'var(--green)', marginTop: '6px' }}>{trend}</div>
           </div>
+        ))}
+      </motion.div>
+
+      {/* ── Recent activity + Quick actions ── */}
+      <motion.div {...fade(0.15)} className="grid-2" style={{ marginBottom: '28px' }}>
+
+        {/* Recent scans */}
+        <div className="card">
+          <div className="card-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span>Recent Analysis Activity</span>
+            <span style={{ color: 'var(--green)', fontSize: '9px' }}>● LIVE</span>
+          </div>
+
+          {history.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-muted)', fontSize: '12px' }}>
+              <Shield size={28} style={{ margin: '0 auto 12px', opacity: 0.3, display: 'block' }} />
+              No scans yet — upload media to begin
+            </div>
+          ) : (
+            <div>
+              {/* Table header */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px 80px 80px', gap: '8px', padding: '6px 0', borderBottom: '1px solid var(--border-color)', marginBottom: '8px' }}>
+                {['Case ID', 'Type', 'Result', 'Status'].map(h => (
+                  <span key={h} style={{ fontSize: '9px', color: 'var(--text-muted)', letterSpacing: '0.1em' }}>{h}</span>
+                ))}
+              </div>
+              {history.slice(0, 5).map((scan: any) => (
+                <div key={scan.id} style={{ display: 'grid', gridTemplateColumns: '1fr 60px 80px 80px', gap: '8px', padding: '8px 0', borderBottom: '1px solid var(--border-color)' }}>
+                  <span style={{ fontSize: '11px', color: 'var(--text-primary)', fontFamily: 'JetBrains Mono', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{scan.id}</span>
+                  <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{scan.type?.toUpperCase()}</span>
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: scan.result === 'AUTHENTIC' ? 'var(--green)' : scan.result === 'FAKE' ? 'var(--red)' : 'var(--amber)' }}>{scan.result}</span>
+                  <span style={{ fontSize: '11px', color: scan.status === 'Certified' ? 'var(--green)' : 'var(--text-secondary)' }}>{scan.status}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Quick actions */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {[
+            { icon: Scan,      label: 'Forensic Scanner',  sub: 'Analyze images, videos & audio',  path: '/scan',        color: 'var(--cyan)'   },
+            { icon: Newspaper, label: 'NewsWatch AI',       sub: 'Fact-check news & social claims', path: '/newswatch',   color: 'var(--purple)' },
+            { icon: Shield,    label: 'File Complaint',     sub: 'Register with Cyber Cell',        path: '/complaint',   color: 'var(--red)'    },
+            { icon: Clock,     label: 'Case Tracker',       sub: 'Monitor your filed cases',        path: '/tracker',     color: 'var(--amber)'  },
+          ].map(({ icon: Icon, label, sub, path, color }) => (
+            <button key={path} onClick={() => navigate(path)}
+              style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 16px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '12px', cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s ease', width: '100%' }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = color; (e.currentTarget as HTMLElement).style.background = 'var(--bg-elevated)'; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-color)'; (e.currentTarget as HTMLElement).style.background = 'var(--bg-secondary)'; }}
+            >
+              <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: `${color}12`, border: `1px solid ${color}25`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Icon size={16} style={{ color }} />
+              </div>
+              <div>
+                <div style={{ fontSize: '13px', fontFamily: 'Syne', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '2px' }}>{label}</div>
+                <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{sub}</div>
+              </div>
+            </button>
+          ))}
         </div>
       </motion.div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {stats.map(({ label, value, icon: Icon, color, change }, i) => (
-          <motion.div
-            key={label}
-            custom={i}
-            variants={fadeUp}
-            initial="hidden"
-            animate="visible"
-            className="card-hover rounded-xl p-5"
-            style={{ 
-              background: 'var(--bg-secondary)', 
-              border: '1px solid var(--border-color)',
-              boxShadow: 'var(--card-shadow)'
-            }}
-          >
-            <div className="flex items-start justify-between mb-4">
-              <div
-                className="p-2 rounded-lg"
-                style={{ background: 'var(--bg-primary)', border: `1px solid var(--border-color)` }}
-              >
-                <Icon size={18} style={{ color }} />
-              </div>
-              <TrendingUp size={12} style={{ color: 'var(--green)', marginTop: 4 }} />
+      {/* ── Platform capabilities ── */}
+      <motion.div {...fade(0.2)} className="card">
+        <div className="card-title">PLATFORM CAPABILITIES</div>
+        <div className="grid-3">
+          {[
+            { icon: '🔍', title: 'Multi-Modal Detection',  desc: 'Images, videos and audio deepfake analysis using AWS Rekognition and OpenCV frame sampling' },
+            { icon: '📰', title: 'NewsWatch Intelligence', desc: 'Real-time fact-checking powered by Gemini 2.0 Flash and Jina Reader content extraction' },
+            { icon: '⚖️', title: 'Legal Risk Assessment',  desc: 'Automatic IT Act section identification with CERT-In escalation and complaint filing support' },
+          ].map(({ icon, title, desc }) => (
+            <div key={title} style={{ padding: '16px', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '10px' }}>
+              <div style={{ fontSize: '22px', marginBottom: '10px' }}>{icon}</div>
+              <div style={{ fontFamily: 'Syne', fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '6px' }}>{title}</div>
+              <div style={{ fontSize: '11px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>{desc}</div>
             </div>
-            <p className="text-2xl font-bold mb-1" style={{ fontFamily: 'JetBrains Mono, monospace', color }}>
-              {value}
-            </p>
-            <p className="text-xs mb-1" style={{ color: 'var(--text-primary)', fontFamily: 'Syne, sans-serif' }}>{label}</p>
-            <p className="text-xs" style={{ color: 'var(--green)', fontFamily: 'JetBrains Mono, monospace' }}>{change}</p>
-          </motion.div>
-        ))}
-      </div>
-
-      {/* Recent Activity */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.4 }}
-        className="rounded-xl overflow-hidden"
-        style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}
-      >
-        <div className="p-5 border-b flex items-center gap-3" style={{ borderColor: 'var(--border-color)' }}>
-          <Clock size={16} style={{ color: 'var(--cyan)' }} />
-          <h3 className="font-semibold text-sm" style={{ fontFamily: 'Syne, sans-serif', color: 'var(--text-primary)' }}>
-            Recent Analysis Activity
-          </h3>
-          <span
-            className="ml-auto text-xs px-2 py-0.5 rounded-full"
-            style={{ background: 'var(--cyan-glow, rgba(0, 245, 255, 0.1))', color: 'var(--cyan)', border: '1px solid var(--cyan-border, rgba(0, 245, 255, 0.2))' }}
-          >
-            LIVE
-          </span>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                {['Case ID', 'Type', 'TruthScore™', 'Result', 'Status', 'Time'].map(h => (
-                  <th
-                    key={h}
-                    className="text-left px-5 py-3 text-xs font-medium"
-                    style={{ color: 'var(--text-secondary)', fontFamily: 'JetBrains Mono, monospace' }}
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {history.map(({ id, type, result, score, time, status }) => (
-                <tr
-                  key={id}
-                  className="transition-colors"
-                  style={{ borderBottom: '1px solid var(--border-color)', opacity: 0.9 }}
-                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-primary)')}
-                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                >
-                  <td className="px-5 py-3 font-mono text-xs" style={{ color: 'var(--cyan)' }}>{id}</td>
-                  <td className="px-5 py-3 text-xs capitalize" style={{ color: 'var(--text-secondary)', fontFamily: 'JetBrains Mono, monospace' }}>{type}</td>
-                  <td className="px-5 py-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-16 h-1.5 rounded-full" style={{ background: 'var(--border-color)' }}>
-                        <div
-                          className="h-full rounded-full"
-                          style={{
-                            width: `${score}%`,
-                            background: score > 70 ? 'var(--green)' : score > 40 ? 'var(--amber)' : 'var(--red)',
-                          }}
-                        />
-                      </div>
-                      <span className="text-xs font-mono" style={{ color: score > 70 ? 'var(--green)' : score > 40 ? 'var(--amber)' : 'var(--red)', fontFamily: 'JetBrains Mono, monospace' }}>
-                        {score}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-5 py-3">
-                    <span
-                      className="text-xs px-2 py-0.5 rounded-full font-mono font-bold"
-                      style={{
-                        background: result === 'AUTHENTIC' || result === 'VERIFIED' ? 'rgba(0, 255, 136, 0.1)' : result === 'FAKE' || result === 'FABRICATED' || result === 'MISLEADING' ? 'rgba(255, 61, 61, 0.1)' : 'rgba(255, 184, 0, 0.1)',
-                        color: result === 'AUTHENTIC' || result === 'VERIFIED' ? 'var(--green)' : result === 'FAKE' || result === 'FABRICATED' || result === 'MISLEADING' ? 'var(--red)' : 'var(--amber)',
-                        border: `1px solid ${result === 'AUTHENTIC' || result === 'VERIFIED' ? 'rgba(0, 255, 136, 0.2)' : result === 'FAKE' || result === 'FABRICATED' || result === 'MISLEADING' ? 'rgba(255, 61, 61, 0.2)' : 'rgba(255, 184, 0, 0.2)'}`,
-                        fontFamily: 'JetBrains Mono, monospace',
-                      }}
-                    >
-                      {result}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3 text-xs" style={{ color: 'var(--text-secondary)', fontFamily: 'JetBrains Mono, monospace' }}>{status}</td>
-                  <td className="px-5 py-3 text-xs" style={{ color: 'var(--text-secondary)', fontFamily: 'JetBrains Mono, monospace' }}>{time}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          ))}
         </div>
       </motion.div>
     </div>

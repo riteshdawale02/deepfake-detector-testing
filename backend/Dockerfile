@@ -1,10 +1,15 @@
+# Stage 1: Build frontend
 FROM node:20-alpine AS frontend-builder
 WORKDIR /frontend
+
 COPY frontend/package*.json ./
 RUN npm install --legacy-peer-deps
+
 COPY frontend/ .
 RUN npm run build
 
+
+# Stage 2: Backend
 FROM python:3.11-slim
 WORKDIR /app
 
@@ -18,11 +23,14 @@ RUN apt-get update && apt-get install -y \
     libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
+# Copy built frontend
 COPY --from=frontend-builder /frontend/dist /frontend/dist
 
+# Install backend dependencies
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Copy backend code
 COPY backend/ .
 
 EXPOSE 8000
